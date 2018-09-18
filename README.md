@@ -1,6 +1,6 @@
 # On studying the performance of Hadoop Map Reduce vs MPI for Aggregation Operations: A Big Data Challenge 
 
-The following is a project accomplished as a past of MSc AMOD with Big Data Analytics stream. The objective of the work is to look into I/O for Map-Reduce and MPI paradigms. 
+The following is a project accomplished as a past of MSc AMOD with Big Data Analytics stream. The objective of the work is to look into parallel I/O for Map-Reduce and MPI paradigms. 
 
 ## Project Proposal:
 Parallel and distributed computing have largely been utilized for solving problem involving large amount of data. The requirement today is to minimize the amount of time to complete a process. Two different computing techniques Map Reduce and MPI have found increased attention in recent times for two different groups of users; Map Reduce in business community and MPI in research community. Now the task of aggregation (i.e. sum, min, max, etc.) must be performed by both the scientific and business community for their relevant tasks. Aggregation tasks are usually used to summarize the data before proceeding with any type of analysis. The challenge is to determine the performance of MPI and Map Reduce for aggregation task. MPI is a paradigm for parallel processing while Map Reduce is a programming model. 
