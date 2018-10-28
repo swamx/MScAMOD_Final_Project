@@ -26,10 +26,11 @@ import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
 import org.apache.hadoop.mapreduce.lib.input.FileSplit;
 
 public class AggregateFare {
-
+    //Mapper class
     public static class TokenizerMapper extends Mapper<Object, Text, Text, DoubleWritable> {
         Text date = new Text();
         DoubleWritable Totalfare;
+	//Mapper function
         public void map(Object key, Text value, Context context) throws IOException, InterruptedException {
             String line = value.toString();
             String[] ParsedLine = line.split(",");
@@ -41,7 +42,8 @@ public class AggregateFare {
                 if( Pattern.matches("[0-9]{4}.[0-9]{2}.[0-9]{2}\\s*[0-9]{2}.[0-9]{2}.[0-9]{2}\\s*[aApP]*[mM]*", ParsedLine[1].trim()) && Pattern.matches("\\-?[0-9]{1,}\\.{0,}[0-9]{0,}", ParsedLine[(ParsedLine.length-1)].trim())){ 
                     SimpleDateFormat date_format = new SimpleDateFormat("yyyy-MM-dd' 'HH:mm:ss");
                     String fileName = ((FileSplit) context.getInputSplit()).getPath().getName();
-                    //System.out.println("Year: " + fileName.split("_")[2].split("\\.")[0].split("-")[0] + "\t Month: " + fileName.split("_")[2].split("\\.")[0].split("-")[1]);
+                    //Uncomment next line to enable debugging mode 
+		    //System.out.println("Year: " + fileName.split("_")[2].split("\\.")[0].split("-")[0] + "\t Month: " + fileName.split("_")[2].split("\\.")[0].split("-")[1]);
                     try {                        
 			            Date d = date_format.parse(ParsedLine[1].trim());
 			            Calendar calendar = Calendar.getInstance(TimeZone.getDefault());
@@ -55,7 +57,6 @@ public class AggregateFare {
                             //Log the records that could not be parsed
                             System.out.println("Line: "+line);
                         }
-                         //System.out.println(date + " : " + Totalfare);
                      } 
                      catch(ParseException pe){
                         //Log the records that could not be parsed
@@ -71,8 +72,8 @@ public class AggregateFare {
             }
         }
     }
-
-    public static class MinMaxReducer extends Reducer<Text, DoubleWritable, Text, Text> {
+    //Reducer Class	
+    public static class MinReducer extends Reducer<Text, DoubleWritable, Text, Text> {
         public void reduce(Text key, Iterable<DoubleWritable> values, Context context) throws IOException, InterruptedException {
             double min = Integer.MAX_VALUE, max = 0;
             Iterator<DoubleWritable> iterator = values.iterator(); 
@@ -94,32 +95,31 @@ public class AggregateFare {
         conf.set("mapreduce.map.output.compress", "true");
         conf.set("mapreduce.map.output.compress.codec", "org.apache.hadoop.io.compress.SnappyCodec");
 
-        //Input split size
-        //67108864 = 64 MB
-        final long DEFAULT_SPLIT_SIZE = 33554432;
-        conf.set("mapreduce.input.fileinputformat.split.maxsize", String.valueOf(DEFAULT_SPLIT_SIZE ));
-        conf.set("mapreduce.input.fileinputformat.split.minsize", String.valueOf(DEFAULT_SPLIT_SIZE ));
-
-
-        //skipbad records
-        //SkipBadRecords.setMapperMaxSkipRecords(conf, 100);
-
-        //Set job details
+        //Input split size: Use next few lines to enable input split size. Default is equal to block size
+        //Set values for DEFAULT_SPLIT_SIZE for respective sizes 67108864 = 64 MB, 33554432 = 32 MB
+        //final long DEFAULT_SPLIT_SIZE = 33554432;
+        //conf.set("mapreduce.input.fileinputformat.split.maxsize", String.valueOf(DEFAULT_SPLIT_SIZE ));
+        //conf.set("mapreduce.input.fileinputformat.split.minsize", String.valueOf(DEFAULT_SPLIT_SIZE )
+        
+	    
+	//Set job details
         Job job = Job.getInstance(conf, "MinFare (Full Data:IS 32MB:Snappy Compression:BlockSize 128MB)");
         job.setJarByClass(AggregateFare.class);
         job.setMapperClass(TokenizerMapper.class);
         job.setMapOutputKeyClass(Text.class);
         job.setMapOutputValueClass(DoubleWritable.class);
-        job.setReducerClass(MinMaxReducer.class);
+        job.setReducerClass(MinReducer.class);
         job.setOutputKeyClass(Text.class);
         job.setOutputValueClass(Text.class);
         job.setInputFormatClass(TextInputFormat.class);
         
         //Set file format details    j
         FileInputFormat.setInputDirRecursive(job, true);
+	//Keep the input path constant to /data dir in hdfs. should be changed according to your requirement
         FileInputFormat.addInputPath(job, new Path("/data"));
+	//Using first arguement as output path. Arguement is supplied while submitting Map-Reduce Job
         FileOutputFormat.setOutputPath(job, new Path(args[0]));
-
+	//Closes system when job is done
         System.exit(job.waitForCompletion(true) ? 0 : 1);
     }
 }
