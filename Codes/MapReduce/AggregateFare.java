@@ -1,23 +1,4 @@
-/*
-File Purpose: The following code implemets the Map Reduce logic
-to calculate the minimum & maximum value of taxi fare by month and year.
-
-Author: Devang Swami
-
-Instructions: 
-To compile the program: bin/hadoop com.sun.tools.javac.Main AggregateFare.java
-To create JAR for executables: jar cf aggFare.jar AggregateFare*.class
-Execute as Map Reduce Job: $HADOOP_HOME/bin/hadoop jar aggFare.jar AggregateFare input_path output_path
-
-Notes:
-Please note that this file has all the required functionalities 
-required to implement the mentioned purpose.
-
-
-*/
-
-
-//Java libraries for common utilities and exception 
+//Libraries for preprocessing and performing operations on a single record
 import java.io.IOException;
 import java.util.StringTokenizer;
 import java.text.ParseException;
@@ -27,7 +8,10 @@ import java.util.Date;
 import java.util.TimeZone;
 import java.util.*;
 
-//Java Libraries for Map Reduce framework
+//Library for pattern matching - used here as a primial mode for verifying data integrity
+import java.util.regex.Pattern; 
+
+//Libraries for Hadoop Map Reduce Job Configuration
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.DoubleWritable;
@@ -39,97 +23,103 @@ import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
+import org.apache.hadoop.mapreduce.lib.input.FileSplit;
 
 public class AggregateFare {
-	
-	//Mapper program to tokenize the data into format <year-month, fare>
-	public static class TokenizerMapper extends Mapper<Object, Text, Text, DoubleWritable> {
-		Text date = new Text();
-		DoubleWritable Totalfare;
 
-		public void map(Object key, Text value, Context context) throws IOException, InterruptedException {
-			//Take one line at a time to process and split the data based on separator ","
+    public static class TokenizerMapper extends Mapper<Object, Text, Text, DoubleWritable> {
+        Text date = new Text();
+        DoubleWritable Totalfare;
+        public void map(Object key, Text value, Context context) throws IOException, InterruptedException {
             String line = value.toString();
             String[] ParsedLine = line.split(",");
+            int counter = 0;
             
-			//Check for the line containing the column names (since data is in csv) and do not use it to generate key-value pairs
-            if(!ParsedLine[0].equals("VendorID") && !ParsedLine[0].equals("")){
-			    //Get date and fare from the tokenized data
-				SimpleDateFormat date_format = new SimpleDateFormat("yyyy-MM-dd' 'HH:mm:ss");
-                //The following code is in try-catch so as to handle Parse Exceptions
-				try{
-			        Date d = date_format.parse(ParsedLine[1]);
-			        Calendar calendar = Calendar.getInstance(TimeZone.getDefault());
-			        calendar.setTime(d);
-                    date.set(((int) calendar.get(Calendar.MONTH) + 1)+"-" + calendar.get(Calendar.YEAR));
-                    Totalfare = new DoubleWritable(Double.parseDouble(ParsedLine[16]));
-                    //Write the results as key-value pair
-                    context.write(date, Totalfare);
-                } 
-                catch(ParseException pe){
-                    throw new IOException(pe);
+            //No of element check: If this check fails chances are its an empty record
+            if((int) ParsedLine.length > 2){              
+                //Sanity checking
+                if( Pattern.matches("[0-9]{4}.[0-9]{2}.[0-9]{2}\\s*[0-9]{2}.[0-9]{2}.[0-9]{2}\\s*[aApP]*[mM]*", ParsedLine[1].trim()) && Pattern.matches("\\-?[0-9]{1,}\\.{0,}[0-9]{0,}", ParsedLine[(ParsedLine.length-1)].trim())){ 
+                    SimpleDateFormat date_format = new SimpleDateFormat("yyyy-MM-dd' 'HH:mm:ss");
+                    String fileName = ((FileSplit) context.getInputSplit()).getPath().getName();
+                    //System.out.println("Year: " + fileName.split("_")[2].split("\\.")[0].split("-")[0] + "\t Month: " + fileName.split("_")[2].split("\\.")[0].split("-")[1]);
+                    try {                        
+			            Date d = date_format.parse(ParsedLine[1].trim());
+			            Calendar calendar = Calendar.getInstance(TimeZone.getDefault());
+			            calendar.setTime(d);
+                        date.set(((int) calendar.get(Calendar.MONTH) + 1)+"-" + calendar.get(Calendar.YEAR));
+                        if(Integer.parseInt(fileName.split("_")[2].split("\\.")[0].split("-")[0]) == calendar.get(Calendar.YEAR) && Integer.parseInt(fileName.split("_")[2].split("\\.")[0].split("-")[1]) == (calendar.get(Calendar.MONTH)+1) ){
+                            Totalfare = new DoubleWritable(Math.abs(Double.parseDouble(ParsedLine[(ParsedLine.length-1)].trim())));
+                            context.write(date, Totalfare);
+                        }
+                        else{
+                            //Log the records that could not be parsed
+                            System.out.println("Line: "+line);
+                        }
+                         //System.out.println(date + " : " + Totalfare);
+                     } 
+                     catch(ParseException pe){
+                        //Log the records that could not be parsed
+                        System.out.println("Line: "+line);
+                        throw new IOException(pe);
+                     }
+                }
+                //Log the records that donot meet the sanity check requirements
+                else{
+                    System.out.println(ParsedLine[1].trim() + ":" + ParsedLine[ParsedLine.length-1].trim());
+                
                 }
             }
-		}
-	}
-	
-	//Implemenation of reducer
-	public static class MinMaxReducer extends Reducer<Text, DoubleWritable, Text, Text> {
-		public void reduce(Text key, Iterable<DoubleWritable> values, Context context) throws IOException, InterruptedException {
-			//Global storage variables to store minimum and maximum values
-			double min = Integer.MAX_VALUE, max = 0;
-            //Iterator to iterate over values belonging to same key.
-			Iterator<DoubleWritable> iterator = values.iterator(); 
-	        //Calculate minimum & maximum values for each key
-			while (iterator.hasNext()) {
-		            double value = iterator.next().get();
-		            if (value < min && value > 0) { 
-			            min = value;
-		            }
-		            if (value > max && value > 0) { 
-			            max = value;
-		            } 
-	        }
-	        //Write results back as key value pairs
-	        context.write(new Text(key), new Text(", " + min + ", " + max));
-		}
-	}
+        }
+    }
 
-	public static void main(String[] args) throws Exception {
-		
-		//Configuration for Map Reduce jobs
-		Configuration conf = new Configuration();
-		
-		//Comment or uncomment next two lines to enable intermediate compression
-		conf.set("mapreduce.map.output.compress", "true");
-		conf.set("mapreduce.map.output.compress.codec", "org.apache.hadoop.io.compress.SnappyCodec");
-		
-		//Comment or uncomment to set Input Split size for Map Reduce
-		// conf.setLong(FileInputFormat.SPLIT_MAXSIZE, conf.getLong( FileInputFormat.SPLIT_MAXSIZE, DEFAULT_SPLIT_SIZE) / 2);
-		
-		//Set map reduce job details
-		Job job = Job.getInstance(conf, "Min-Max Fare");
-		job.setJarByClass(AggregateFare.class);
-		
-		//Set mapper classes for the job
-		job.setMapperClass(TokenizerMapper.class);
-		job.setMapOutputKeyClass(Text.class);
-		job.setMapOutputValueClass(DoubleWritable.class);
+    public static class MinMaxReducer extends Reducer<Text, DoubleWritable, Text, Text> {
+        public void reduce(Text key, Iterable<DoubleWritable> values, Context context) throws IOException, InterruptedException {
+            double min = Integer.MAX_VALUE, max = 0;
+            Iterator<DoubleWritable> iterator = values.iterator(); 
+	        while (iterator.hasNext()) {
+		        double value = iterator.next().get();
+		        if (value < min && value > 0) { 
+			        min = value;
+		        }
+	        }	        
+	        context.write(new Text(key), new Text(min + ""));
+        }
+    }
 
-		//Set reducer classes for the job
-		job.setReducerClass(MinMaxReducer.class);
-		job.setOutputKeyClass(Text.class);
-		job.setOutputValueClass(Text.class);
+    public static void main(String[] args) throws Exception {
+        //Set configurations
+        Configuration conf = new Configuration();
+        
+        //Set compression format    
+        conf.set("mapreduce.map.output.compress", "true");
+        conf.set("mapreduce.map.output.compress.codec", "org.apache.hadoop.io.compress.SnappyCodec");
 
-		//Set input and output classes for the jobs. TextInputFormat class splits based on new line character
-		job.setInputFormatClass(TextInputFormat.class);
-		job.setOutputFormatClass(TextOutputFormat.class);
+        //Input split size
+        //67108864 = 64 MB
+        final long DEFAULT_SPLIT_SIZE = 33554432;
+        conf.set("mapreduce.input.fileinputformat.split.maxsize", String.valueOf(DEFAULT_SPLIT_SIZE ));
+        conf.set("mapreduce.input.fileinputformat.split.minsize", String.valueOf(DEFAULT_SPLIT_SIZE ));
 
-		//Fetches input & output paths from the arguments supplied
-		FileInputFormat.addInputPath(job, new Path(args[0]));
-		FileOutputFormat.setOutputPath(job, new Path(args[1]));
-		
-		//System exit information
-		System.exit(job.waitForCompletion(true) ? 0 : 1);
-	}
+
+        //skipbad records
+        //SkipBadRecords.setMapperMaxSkipRecords(conf, 100);
+
+        //Set job details
+        Job job = Job.getInstance(conf, "MinFare (Full Data:IS 32MB:Snappy Compression:BlockSize 128MB)");
+        job.setJarByClass(AggregateFare.class);
+        job.setMapperClass(TokenizerMapper.class);
+        job.setMapOutputKeyClass(Text.class);
+        job.setMapOutputValueClass(DoubleWritable.class);
+        job.setReducerClass(MinMaxReducer.class);
+        job.setOutputKeyClass(Text.class);
+        job.setOutputValueClass(Text.class);
+        job.setInputFormatClass(TextInputFormat.class);
+        
+        //Set file format details    j
+        FileInputFormat.setInputDirRecursive(job, true);
+        FileInputFormat.addInputPath(job, new Path("/data"));
+        FileOutputFormat.setOutputPath(job, new Path(args[0]));
+
+        System.exit(job.waitForCompletion(true) ? 0 : 1);
+    }
 }
