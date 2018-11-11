@@ -1,0 +1,4 @@
+MapReduceStage, No Compression, Snappy Compression
+Shuffle, 14.45, 9.43
+Merge, 16.58, 4.71
+Reduce, 19.12, 7.6
