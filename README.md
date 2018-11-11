@@ -1,6 +1,6 @@
 # On studying the performance of Hadoop Map Reduce vs MPI for Aggregation Operations: A Big Data Challenge 
 
-The following is a project accomplished as a past of MSc AMOD with Big Data Analytics stream. The objective of the work is to look into parallel I/O for Map-Reduce and MPI paradigms. 
+The following is a project accomplished as a past of MSc AMOD with Big Data Analytics stream. The objective of the work is to look into parallel I/O for Map-Reduce and MPI. 
  
 ## Bibliography 
 
